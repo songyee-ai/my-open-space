@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>청주동물원 추모관을 알갱이로</title>
+<style>
+  html,body{margin:0;height:100%;background:#0b0f14;color:#e2e8f0;overflow:hidden;
+    font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sans KR",sans-serif}
+  #c{display:block;width:100%;height:100%;touch-action:none}
+  .panel{position:fixed;background:rgba(11,15,20,.9);border:1px solid #1e293b;
+    border-radius:12px;padding:12px 14px;font-size:12.5px;line-height:1.65;
+    backdrop-filter:blur(6px)}
+  #hud{left:12px;top:12px;max-width:min(360px,calc(100vw - 24px))}
+  #hud h1{margin:0 0 6px;font-size:14px;color:#7dd3fc;font-weight:600}
+  #steps{margin:0;padding:0;list-style:none}
+  #steps li{padding:1px 0;color:#64748b}
+  #steps li.ok{color:#86efac}
+  #steps li.ok::before{content:"OK  ";color:#22c55e;font-weight:700}
+  #steps li.bad{color:#fca5a5}
+  #steps li.bad::before{content:"X   ";color:#ef4444;font-weight:700}
+  #steps li.run::before{content:"..  ";color:#eab308}
+  #steps li:not(.ok):not(.bad):not(.run)::before{content:"    "}
+  #stat{margin-top:9px;padding-top:8px;border-top:1px solid #1e293b;color:#94a3b8;
+    font-variant-numeric:tabular-nums}
+  #stat b{color:#e2e8f0;font-weight:600}
+  #fix{margin-top:10px;padding:10px;border-radius:8px;background:#2a1215;
+    border:1px solid #7f1d1d;color:#fecaca;display:none;white-space:pre-wrap}
+  #fix.show{display:block}
+  #fix b{color:#fca5a5}
+  #ctl{right:12px;top:12px;text-align:right}
+  button{background:#1e293b;color:#e2e8f0;border:1px solid #334155;border-radius:8px;
+    padding:6px 11px;font-size:12px;cursor:pointer;margin:2px}
+  button:hover{background:#334155}
+  button.on{background:#0369a1;border-color:#0ea5e9}
+  input[type=range]{width:130px;vertical-align:middle}
+  #trap{left:12px;bottom:12px;max-width:min(430px,calc(100vw - 24px));display:none;
+    max-height:52vh;overflow:auto}
+  #trap.show{display:block}
+  #trap h2{margin:0 0 6px;font-size:13px;color:#fbbf24}
+  #trap dt{color:#7dd3fc;margin-top:7px;font-weight:600}
+  #trap dd{margin:1px 0 0 0;color:#94a3b8}
+  #trap dl{margin:0}
+  code{background:#1e293b;padding:1px 5px;border-radius:4px;color:#fbbf24;font-size:11.5px}
+  .dim{color:#64748b}
+  #drop{position:fixed;inset:0;display:none;place-items:center;z-index:50;
+    background:rgba(3,105,161,.22);border:3px dashed #38bdf8}
+  #drop.show{display:grid}
+  #drop span{background:rgba(11,15,20,.92);border:1px solid #0ea5e9;border-radius:14px;
+    padding:18px 26px;font-size:15px;color:#7dd3fc}
+  #hint{right:12px;bottom:12px;color:#64748b;font-size:11.5px}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div class="panel" id="hud">
+  <h1>청주동물원 추모관</h1>
+  <ul id="steps">
+    <li id="s1">three.js 와 Spark 불러오기</li>
+    <li id="s2">SparkRenderer 를 장면에 넣기</li>
+    <li id="s3">파일 받기</li>
+    <li id="s4">알갱이로 풀기</li>
+    <li id="s5">크기를 재서 카메라 놓기</li>
+  </ul>
+  <div id="stat"></div>
+  <div id="fix"></div>
+</div>
+
+<div class="panel" id="ctl">
+  <div><button id="shot">촬영 자리로</button><button id="fit">전체 보기</button><button id="flip">위아래 뒤집기</button></div>
+  <div><button id="spin">자동 회전</button><button id="help">막혔을 때</button></div>
+  <div class="dim" style="margin-top:6px">알갱이 퍼짐 <input type="range" id="std" min="0.6" max="3.2" step="0.1" value="2.83"></div>
+</div>
+
+<div class="panel" id="hint">파일을 창에 끌어다 놓으면 그 파일로 다시 그립니다</div>
+
+<div class="panel" id="trap">
+  <h2>여기서 자주 막힙니다</h2>
+  <dl>
+    <dt>화면이 까맣고 오류도 안 뜬다</dt>
+    <dd>알갱이는 다 올라갔는데 <code>SparkRenderer</code> 를 장면에 안 넣은 것입니다.
+      Spark 는 자체 렌더러를 <code>scene.add()</code> 해야 그립니다. 안 넣으면
+      조용히 아무것도 안 그리고 오류도 안 냅니다. 위 목록 둘째 줄을 보십시오.</dd>
+    <dt>방이 거꾸로 서 있거나 천장이 아래에 있다</dt>
+    <dd>이 모델은 Y 가 아래를 향하고 three.js 는 Y 가 위입니다.
+      만들 때 <code>y</code> 와 <code>z</code> 의 부호를 뒤집어야 바로 섭니다.
+      지금 확인하려면 <b>위아래 뒤집기</b> 를 눌러 보십시오.</dd>
+    <dt>알갱이 개수는 나오는데 화면에 아무것도 없다</dt>
+    <dd>알갱이 덩어리는 일반 메시가 아니라서 <code>Box3.setFromObject</code> 가 빈 상자를
+      돌려줍니다. 카메라가 엉뚱한 곳을 보고 있는 것입니다. Spark 의
+      <code>mesh.getBoundingBox()</code> 로 재야 합니다.</dd>
+    <dt>Invalid file type: sog</dt>
+    <dd>확장자와 Spark 안쪽 이름이 다릅니다. <code>.sog</code> 의 안쪽 이름은
+      <code>pcsogszip</code> 입니다. 이 페이지는 대응표를 두어 바꿔 넘깁니다.</dd>
+    <dt>파일을 못 받는다</dt>
+    <dd><code>file://</code> 로 열면 브라우저가 파일 읽기를 막습니다.
+      같은 폴더에서 <code>python3 -m http.server</code> 를 띄우고
+      <code>http://localhost:8000</code> 으로 여십시오.
+      웹에 올렸는데 안 되면 <b>주소 뒤에 파일 이름을 붙여</b> 새 탭에서 직접 열어 보십시오.</dd>
+  </dl>
+</div>
+
+<div id="drop"><span>놓으면 이 파일로 다시 그립니다</span></div>
+
+<script type="importmap">
+{"imports":{
+  "three":"https://cdn.jsdelivr.net/npm/three@0.185.1/build/three.module.js",
+  "three/addons/":"https://cdn.jsdelivr.net/npm/three@0.185.1/examples/jsm/",
+  "@sparkjsdev/spark":"https://cdn.jsdelivr.net/npm/@sparkjsdev/spark@2.1.0/dist/spark.module.js"
+}}
+</script>
+<script type="module">
+/* ===================================================================
+   여기 한 줄만 고치면 됩니다. 같은 폴더에 둔 파일 이름을 적으십시오.
+   =================================================================== */
+let SPLAT_FILE = "scene.sog";   // .sog / .ply / .compressed.ply / .spz / .splat
+const FLIP_YZ  = false;         // 만들 때 이미 뒤집었으면 false
+
+/* 영상을 실제로 찍은 카메라 자리입니다. 여기서 시작하지 않으면 벽 뒤나 옆에서
+   보게 되어 명패 글씨가 좌우 반전된 것처럼 읽힙니다. 좌표가 거울인 것이 아닙니다.
+   크기(near/far)는 아래에서 Spark 가 준 bounds 로 따로 잽니다. */
+const SHOT = { eye: [0.9097, -0.0214, 0.9820], target: [2.4535, -0.1021, 0.0717] };
+/* =================================================================== */
+
+// 형식을 견주어 볼 때는 주소 뒤에 ?f=scene.spz 처럼 붙이면 됩니다.
+SPLAT_FILE = new URLSearchParams(location.search).get("f") || SPLAT_FILE;
+
+const el = id => document.getElementById(id);
+const mark = (id, cls) => { el(id).className = cls; };
+const clearFix = () => { el("fix").classList.remove("show"); el("fix").innerHTML = ""; };
+function fail(msg) {
+  const f = el("fix"); f.classList.add("show");
+  f.innerHTML = "<b>막혔습니다</b>\n" + msg;
+  el("trap").classList.add("show");
+}
+addEventListener("error", e => fail("자바스크립트 오류: " + (e?.message ?? String(e))));
+addEventListener("unhandledrejection", e =>
+  fail("처리 못 한 실패: " + (e.reason?.message || e.reason)));
+
+let THREE, OrbitControls, SPARK;
+try {
+  THREE = await import("three");
+  ({ OrbitControls } = await import("three/addons/controls/OrbitControls.js"));
+  SPARK = await import("@sparkjsdev/spark");
+  mark("s1", "ok");
+} catch (e) {
+  mark("s1", "bad");
+  fail("three.js 나 Spark 를 못 불러왔습니다. 인터넷 연결과 CDN 차단 여부를 보십시오.\n" + (e?.message ?? String(e)));
+  throw e;
+}
+
+const canvas = el("c");
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: false });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0b0f14);
+const camera = new THREE.PerspectiveCamera(55, 1, 0.01, 1000);
+const controls = new OrbitControls(camera, canvas);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+camera.position.set(2, 1, 2);
+
+/* 함정 1. Spark 는 SparkRenderer 를 장면에 넣어야 그립니다.
+   이 두 줄을 빼면 알갱이가 다 올라가고도 화면이 검고 오류도 안 납니다. */
+let spark = null;
+if (SPARK.SparkRenderer) {
+  spark = new SPARK.SparkRenderer({ renderer });
+  scene.add(spark);
+  mark("s2", "ok");
+} else {
+  mark("s2", "bad");
+  fail("이 판의 Spark 에는 SparkRenderer 가 없습니다. 버전을 확인하십시오.");
+}
+
+function resize() {
+  renderer.setSize(innerWidth, innerHeight, false);
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+}
+addEventListener("resize", resize); resize();
+
+/* 함정 2. 확장자와 Spark 안쪽 이름이 다릅니다.
+   .sog 를 그냥 "sog" 로 넘기면 Invalid file type: sog 로 걸립니다.
+   .compressed.ply 는 점 두 개짜리 겹 확장자라 먼저 찾아봐야 합니다. */
+const TYPE_OF = {
+  "compressed.ply": "ply",          // PlayCanvas 압축 ply. 안쪽은 ply 로 읽습니다
+  "ply":            "ply",
+  "spz":            "spz",
+  "sog":            "pcsogszip",    // 이름이 확장자와 다릅니다
+  "splat":          "splat",
+  "ksplat":         "ksplat",
+  "rad":            "rad",
+};
+function typeOf(name) {
+  const n = name.toLowerCase().split("?")[0];
+  for (const key of Object.keys(TYPE_OF)) {           // 겹 확장자를 먼저 맞춰 봅니다
+    if (key.includes(".") && n.endsWith("." + key)) return { key, type: TYPE_OF[key] };
+  }
+  const ext = n.split(".").pop();
+  if (TYPE_OF[ext]) return { key: ext, type: TYPE_OF[ext] };
+  return { key: ext, type: null };
+}
+
+let mesh = null, radius = 1, flipped = false;
+
+function setStat(name, bytes, secs, splats) {
+  el("stat").innerHTML =
+    `파일 <b>${name}</b><br>` +
+    `크기 <b>${bytes.toLocaleString("ko-KR")}</b> 바이트 (${(bytes / 1048576).toFixed(2)} MiB)<br>` +
+    `받는 데 <b>${secs.toFixed(2)}</b> 초<br>` +
+    `알갱이 <b>${splats.toLocaleString("ko-KR")}</b> 개` +
+    (splats ? ` · 알갱이당 <b>${(bytes / splats).toFixed(1)}</b> 바이트` : "");
+}
+
+/* 파일 하나를 받아 화면에 올리는 전체 과정. 처음 불러올 때와
+   끌어다 놓았을 때가 같은 길을 씁니다. */
+async function show(name, getBytes) {
+  clearFix();
+  for (const s of ["s3", "s4", "s5"]) mark(s, "");
+  el("s3").textContent = "파일 받기";
+  el("s4").textContent = "알갱이로 풀기";
+  el("s5").textContent = "크기를 재서 카메라 놓기";
+
+  mark("s3", "run");
+  let buf, secs;
+  try {
+    const t0 = performance.now();
+    buf = await getBytes();
+    secs = (performance.now() - t0) / 1000;
+    mark("s3", "ok");
+    el("s3").textContent = `파일 받기 ${name} · ${(buf.byteLength / 1048576).toFixed(2)} MiB · ${secs.toFixed(2)}초`;
+  } catch (e) {
+    mark("s3", "bad");
+    fail(`"${name}" 를 못 받았습니다. ${(e?.message ?? String(e))}\n` +
+         "확인할 것 셋.\n" +
+         "1. 파일이 이 페이지와 같은 폴더에 있는지 (이름 철자와 대소문자)\n" +
+         "2. file:// 로 열지 않았는지. 그러면 브라우저가 막습니다\n" +
+         "3. 웹에 올렸다면 주소 뒤에 파일 이름을 붙여 새 탭에서 직접 열리는지");
+    return;
+  }
+
+  mark("s4", "run");
+  let n = 0;
+  try {
+    const { key, type } = typeOf(name);
+    if (!type) throw new Error(`대응표에 없는 확장자입니다: .${key}`);
+    const next = new SPARK.SplatMesh({ fileBytes: new Uint8Array(buf), fileType: type });
+    scene.add(next);
+    await next.initialized;
+    n = next.packedSplats?.numSplats ?? 0;
+    if (!n) throw new Error("알갱이가 0개입니다");
+    if (mesh) { scene.remove(mesh); mesh.dispose?.(); }
+    mesh = next; flipped = false;
+    mark("s4", "ok");
+    el("s4").textContent = `알갱이로 풀기 ${n.toLocaleString("ko-KR")}개 (형식 ${type})`;
+  } catch (e) {
+    mark("s4", "bad");
+    fail("파일은 받았는데 알갱이로 못 풀었습니다. " + (e?.message ?? String(e)) + "\n" +
+         "확장자와 실제 형식이 맞는지 보십시오.\n" +
+         "점만 든 ply(x,y,z,r,g,b)에는 scale, opacity, rot 열이 없어 여기서 걸립니다.");
+    return;
+  }
+
+  setStat(name, buf.byteLength, secs, n);
+  if (FLIP_YZ) doFlip(true);
+  fit(true);
+}
+
+/* 함정 3. 알갱이 덩어리는 일반 메시가 아니라 three 가 크기를 못 잽니다.
+   Box3.setFromObject 는 빈 상자를 줍니다. Spark 가 주는 자를 씁니다. */
+function measure() {
+  const naive = new THREE.Box3().setFromObject(mesh);
+  const naiveWorks = !naive.isEmpty() && isFinite(naive.min.x);
+  let box = null;
+  if (mesh.getBoundingBox) { try { box = mesh.getBoundingBox(true); } catch (e) {} }
+  if ((!box || box.isEmpty()) && naiveWorks) box = naive;
+  return { box, naiveWorks };
+}
+
+function fit(useShot = false) {
+  if (!mesh) return;
+  const { box, naiveWorks } = measure();
+  if (!box || box.isEmpty()) {
+    mark("s5", "bad");
+    camera.position.set(2, 1, 2); controls.target.set(0, 0, 0);
+    fail("크기를 못 쟀습니다. 카메라를 임의 위치에 놓았으니 손으로 끌어서 찾으십시오.");
+    return;
+  }
+  const c = box.getCenter(new THREE.Vector3());
+  radius = box.getSize(new THREE.Vector3()).length() * 0.5;
+  if (useShot && SHOT && !flipped) {
+    controls.target.set(...SHOT.target);
+    camera.position.set(...SHOT.eye);
+  } else {
+    controls.target.copy(c);
+    camera.position.copy(c).add(new THREE.Vector3(radius * .9, radius * .35, radius * 1.1));
+  }
+  camera.near = Math.max(radius / 1000, 0.001);
+  camera.far = radius * 60;
+  camera.updateProjectionMatrix();
+  mark("s5", "ok");
+  el("s5").textContent =
+    `크기 재기 반지름 ${radius.toFixed(2)} · ${useShot && !flipped ? "촬영 자리에서 시작" : "전체 보기"} · Box3.setFromObject 는 ` +
+    (naiveWorks ? "됐습니다" : "빈 상자를 줬습니다");
+}
+
+function doFlip(silent) {
+  if (!mesh) return;
+  mesh.scale.y *= -1; mesh.scale.z *= -1;
+  mesh.updateMatrixWorld(true);
+  flipped = !flipped;
+  if (!silent) fit();
+}
+
+el("fit").onclick = () => fit(false);
+el("shot").onclick = () => fit(true);
+el("flip").onclick = () => doFlip(false);
+el("help").onclick = () => el("trap").classList.toggle("show");
+el("std").oninput = e => { if (spark) spark.maxStdDev = parseFloat(e.target.value); };
+let spinning = false;
+el("spin").onclick = e => {
+  spinning = !spinning;
+  controls.autoRotate = spinning; controls.autoRotateSpeed = 0.6;
+  e.target.classList.toggle("on", spinning);
+};
+
+/* 과제 추가 요구. 파일을 창에 끌어다 놓으면 그 파일로 다시 그립니다.
+   형식 셋(.compressed.ply / .sog / .spz)을 눈으로 견주어 볼 때 씁니다. */
+let dragDepth = 0;
+addEventListener("dragenter", e => { e.preventDefault(); dragDepth++; el("drop").classList.add("show"); });
+addEventListener("dragover",  e => { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; });
+addEventListener("dragleave", e => { e.preventDefault(); if (--dragDepth <= 0) el("drop").classList.remove("show"); });
+addEventListener("drop", async e => {
+  e.preventDefault(); dragDepth = 0; el("drop").classList.remove("show");
+  const f = e.dataTransfer?.files?.[0];
+  if (!f) return;
+  await show(f.name, () => f.arrayBuffer());
+});
+
+// 무엇이 잘못됐는지 콘솔에서 들여다볼 수 있게 열어 둡니다.
+window.room3d = { THREE, SPARK, scene, camera, controls, renderer, spark,
+                  get mesh(){ return mesh; }, fit, measure, show, typeOf };
+
+(function loop() {
+  requestAnimationFrame(loop);
+  controls.update();
+  renderer.render(scene, camera);
+})();
+
+await show(SPLAT_FILE, async () => {
+  const r = await fetch(SPLAT_FILE);
+  if (!r.ok) throw new Error(`서버가 ${r.status} 를 돌려줬습니다`);
+  return r.arrayBuffer();
+});
+</script>
+</body>
+</html>
